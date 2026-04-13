@@ -49,6 +49,28 @@ export function placeShape(board, shape, placement, fillValue = 1) {
   return next;
 }
 
+function buildToken(shapeName, placementId) {
+  return `${shapeName}@${placementId}`;
+}
+
+function countShapeCells(shape) {
+  let total = 0;
+  for (const row of shape) {
+    for (const v of row) {
+      if (v === 1) total += 1;
+    }
+  }
+  return total;
+}
+
+function parseToken(token) {
+  const [shapeName, idText] = token.split("@");
+  return {
+    shapeName,
+    placementId: Number(idText)
+  };
+}
+
 export function clearLines(board) {
   const size = board.length;
   const fullRows = new Set();
@@ -69,18 +91,31 @@ export function clearLines(board) {
   }
 
   if (fullRows.size === 0 && fullCols.size === 0) {
-    return { board: cloneBoard(board), cleared: 0 };
+    return { board: cloneBoard(board), cleared: 0, removedTokens: new Map() };
   }
 
+  const removedTokens = new Map();
   const next = cloneBoard(board);
   for (const r of fullRows) {
-    for (let c = 0; c < size; c += 1) next[r][c] = 0;
+    for (let c = 0; c < size; c += 1) {
+      const token = next[r][c];
+      if (token !== 0) {
+        removedTokens.set(token, (removedTokens.get(token) || 0) + 1);
+      }
+      next[r][c] = 0;
+    }
   }
   for (const c of fullCols) {
-    for (let r = 0; r < size; r += 1) next[r][c] = 0;
+    for (let r = 0; r < size; r += 1) {
+      const token = next[r][c];
+      if (token !== 0) {
+        removedTokens.set(token, (removedTokens.get(token) || 0) + 1);
+      }
+      next[r][c] = 0;
+    }
   }
 
-  return { board: next, cleared: fullRows.size + fullCols.size };
+  return { board: next, cleared: fullRows.size + fullCols.size, removedTokens };
 }
 
 export function calcScore(m) {
@@ -98,9 +133,35 @@ export function applyTurn(state, shape, fillValue = 1) {
     };
   }
 
-  const placedBoard = placeShape(state.board, shape, placement, fillValue);
-  const { board: clearedBoard, cleared } = clearLines(placedBoard);
+  const hasHistoryState =
+    Array.isArray(state.placedHistory) && Number.isFinite(state.nextPlacementId);
+  const placementId = hasHistoryState ? state.nextPlacementId : null;
+  const boardToken = placementId === null ? fillValue : buildToken(fillValue, placementId);
+  const placedBoard = placeShape(state.board, shape, placement, boardToken);
+  const { board: clearedBoard, cleared, removedTokens } = clearLines(placedBoard);
   const gained = calcScore(cleared);
+
+  let placedHistory = state.placedHistory;
+  let nextPlacementId = state.nextPlacementId;
+  if (hasHistoryState) {
+    const nextHistory = state.placedHistory.map((item) => ({ ...item }));
+    nextHistory.push({
+      placementId,
+      shapeName: fillValue,
+      remainingCells: countShapeCells(shape)
+    });
+    const byId = new Map(nextHistory.map((item) => [item.placementId, item]));
+
+    for (const [token, removedCount] of removedTokens.entries()) {
+      const parsed = parseToken(token);
+      const target = byId.get(parsed.placementId);
+      if (!target) continue;
+      target.remainingCells = Math.max(0, target.remainingCells - removedCount);
+    }
+
+    placedHistory = nextHistory.filter((item) => item.remainingCells > 0);
+    nextPlacementId = placementId + 1;
+  }
 
   return {
     ...state,
@@ -109,6 +170,7 @@ export function applyTurn(state, shape, fillValue = 1) {
     lastCleared: cleared,
     lastGained: gained,
     message: `已放置，消除 ${cleared} 次，本轮 +${gained} 分`,
-    isOver: false
+    isOver: false,
+    ...(hasHistoryState ? { placedHistory, nextPlacementId } : {})
   };
 }

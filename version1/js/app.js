@@ -11,6 +11,7 @@ const dom = {
   status: document.getElementById("status"),
   shapePreview: document.getElementById("shapePreview"),
   shapeName: document.getElementById("shapeName"),
+  placedOrder: document.getElementById("placedOrder"),
   message: document.getElementById("message"),
   startBtn: document.getElementById("startBtn"),
   placeBtn: document.getElementById("placeBtn")
@@ -27,10 +28,19 @@ function buildInitialState() {
     leftSeconds: GAME_SECONDS,
     running: false,
     isOver: false,
+    nextPlacementId: 1,
+    placedHistory: [],
     lastCleared: 0,
     lastGained: 0,
     message: "点击开始后进入 3 分钟挑战"
   };
+}
+
+function cellToShapeName(cell) {
+  if (cell === 0) return null;
+  if (typeof cell !== "string") return String(cell);
+  if (!cell.includes("@")) return cell;
+  return cell.split("@")[0];
 }
 
 function renderBoard() {
@@ -40,11 +50,32 @@ function renderBoard() {
       const div = document.createElement("div");
       div.className = "cell";
       if (cell !== 0) {
+        const shapeName = cellToShapeName(cell);
         div.classList.add("filled");
-        div.style.background = SHAPE_COLORS[cell] || "#22c55e";
+        div.style.background = SHAPE_COLORS[shapeName] || "#22c55e";
       }
       dom.board.appendChild(div);
     }
+  }
+}
+
+function renderPlacedOrder() {
+  dom.placedOrder.innerHTML = "";
+  if (!Array.isArray(state.placedHistory) || state.placedHistory.length === 0) {
+    const emptyEl = document.createElement("li");
+    emptyEl.className = "placed-order-empty";
+    emptyEl.textContent = "暂无记录";
+    dom.placedOrder.appendChild(emptyEl);
+    return;
+  }
+
+  const items = state.placedHistory.slice().reverse();
+  for (const item of items) {
+    const li = document.createElement("li");
+    li.className = "placed-order-item";
+    li.textContent = item.shapeName;
+    li.style.borderColor = SHAPE_COLORS[item.shapeName] || "#4b5563";
+    dom.placedOrder.appendChild(li);
   }
 }
 
@@ -75,6 +106,7 @@ function renderShape(shapeObj) {
 function render() {
   renderBoard();
   renderShape(currentShape);
+  renderPlacedOrder();
   dom.score.textContent = String(state.score);
   dom.time.textContent = String(state.leftSeconds);
   dom.message.textContent = state.message;

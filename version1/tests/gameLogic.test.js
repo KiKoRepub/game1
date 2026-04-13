@@ -84,3 +84,22 @@ test("applyTurn accumulates score after clear", () => {
   assert.equal(next.lastCleared, 1);
   assert.equal(next.score, 20);
 });
+
+test("applyTurn keeps history until shape fully cleared", () => {
+  const state = {
+    board: [
+      ["O@1", 0, "X"],
+      ["O@1", 0, 0],
+      [0, 0, 0]
+    ],
+    score: 0,
+    nextPlacementId: 2,
+    placedHistory: [{ placementId: 1, shapeName: "O", remainingCells: 2 }]
+  };
+  const shape = [[1]];
+  const next = applyTurn(state, shape, "J");
+  assert.equal(next.lastCleared, 1);
+  assert.deepEqual(next.placedHistory, [
+    { placementId: 1, shapeName: "O", remainingCells: 1 }
+  ]);
+});
