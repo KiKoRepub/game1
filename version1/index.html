@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Version1 方块填充小游戏</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section class="panel">
+        <h1>Version1 方块填充</h1>
+        <div class="stats">
+          <p>时间: <span id="time">180</span>s</p>
+          <p>分数: <span id="score">0</span></p>
+          <p>状态: <span id="status">未开始</span></p>
+        </div>
+        <div class="actions">
+          <button id="startBtn">开始游戏</button>
+          <button id="placeBtn" disabled>放置当前图案</button>
+        </div>
+        <h2>当前图案</h2>
+        <div id="shapePreview" class="shape-preview"></div>
+        <p id="shapeName" class="shape-name">-</p>
+        <p id="message" class="message">点击开始后进入 3 分钟挑战</p>
+      </section>
+
+      <section>
+        <h2>棋盘 (8x8)</h2>
+        <div id="board" class="board"></div>
+      </section>
+    </main>
+
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
