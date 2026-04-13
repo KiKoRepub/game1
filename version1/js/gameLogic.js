@@ -63,6 +63,10 @@ function countShapeCells(shape) {
   return total;
 }
 
+function cloneShape(shape) {
+  return shape.map((row) => row.slice());
+}
+
 function parseToken(token) {
   const [shapeName, idText] = token.split("@");
   return {
@@ -123,6 +127,32 @@ export function calcScore(m) {
   return m * 20 + (m - 1) * 70;
 }
 
+export function removePlacementById(state, placementId) {
+  if (!Number.isFinite(placementId)) return state;
+  if (!Array.isArray(state.placedHistory)) return state;
+
+  const tokenSuffix = `@${placementId}`;
+  let removedCells = 0;
+  const board = state.board.map((row) =>
+    row.map((cell) => {
+      if (typeof cell === "string" && cell.endsWith(tokenSuffix)) {
+        removedCells += 1;
+        return 0;
+      }
+      return cell;
+    })
+  );
+
+  if (removedCells === 0) return state;
+
+  return {
+    ...state,
+    board,
+    placedHistory: state.placedHistory.filter((item) => item.placementId !== placementId),
+    selectedPlacementId: null
+  };
+}
+
 export function applyTurn(state, shape, fillValue = 1) {
   const placement = findPlacement(state.board, shape);
   if (!placement) {
@@ -148,7 +178,8 @@ export function applyTurn(state, shape, fillValue = 1) {
     nextHistory.push({
       placementId,
       shapeName: fillValue,
-      remainingCells: countShapeCells(shape)
+      remainingCells: countShapeCells(shape),
+      shape: cloneShape(shape)
     });
     const byId = new Map(nextHistory.map((item) => [item.placementId, item]));
 

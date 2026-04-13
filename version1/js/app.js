@@ -1,5 +1,5 @@
 import { randomShape, SHAPE_COLORS } from "./shapes.js";
-import { applyTurn, createBoard } from "./gameLogic.js";
+import { applyTurn, createBoard, removePlacementById } from "./gameLogic.js";
 
 const BOARD_SIZE = 8;
 const GAME_SECONDS = 180;
@@ -14,7 +14,8 @@ const dom = {
   placedOrder: document.getElementById("placedOrder"),
   message: document.getElementById("message"),
   startBtn: document.getElementById("startBtn"),
-  placeBtn: document.getElementById("placeBtn")
+  placeBtn: document.getElementById("placeBtn"),
+  deleteBtn: document.getElementById("deleteBtn")
 };
 
 let state = buildInitialState();
@@ -30,10 +31,18 @@ function buildInitialState() {
     isOver: false,
     nextPlacementId: 1,
     placedHistory: [],
+    selectedPlacementId: null,
     lastCleared: 0,
     lastGained: 0,
     message: "点击开始后进入 3 分钟挑战"
   };
+}
+
+function tokenToPlacementId(token) {
+  if (typeof token !== "string" || !token.includes("@")) return null;
+  const parts = token.split("@");
+  const id = Number(parts[1]);
+  return Number.isFinite(id) ? id : null;
 }
 
 function cellToShapeName(cell) {
@@ -45,14 +54,25 @@ function cellToShapeName(cell) {
 
 function renderBoard() {
   dom.board.innerHTML = "";
-  for (const row of state.board) {
-    for (const cell of row) {
+  for (let r = 0; r < state.board.length; r += 1) {
+    const row = state.board[r];
+    for (let c = 0; c < row.length; c += 1) {
+      const cell = row[c];
       const div = document.createElement("div");
       div.className = "cell";
+      div.dataset.row = String(r);
+      div.dataset.col = String(c);
       if (cell !== 0) {
         const shapeName = cellToShapeName(cell);
+        const placementId = tokenToPlacementId(cell);
         div.classList.add("filled");
         div.style.background = SHAPE_COLORS[shapeName] || "#22c55e";
+        if (placementId !== null) {
+          div.dataset.placementId = String(placementId);
+          if (state.selectedPlacementId === placementId) {
+            div.classList.add("selected");
+          }
+        }
       }
       dom.board.appendChild(div);
     }
@@ -73,8 +93,37 @@ function renderPlacedOrder() {
   for (const item of items) {
     const li = document.createElement("li");
     li.className = "placed-order-item";
-    li.textContent = item.shapeName;
+    if (state.selectedPlacementId === item.placementId) {
+      li.classList.add("active");
+    }
+    li.dataset.placementId = String(item.placementId);
     li.style.borderColor = SHAPE_COLORS[item.shapeName] || "#4b5563";
+
+    const title = document.createElement("div");
+    title.className = "placed-order-title";
+    title.textContent = item.shapeName;
+    li.appendChild(title);
+
+    const preview = document.createElement("div");
+    preview.className = "placed-shape-preview";
+    if (Array.isArray(item.shape) && item.shape.length > 0) {
+      preview.style.gridTemplateColumns = `repeat(${item.shape[0].length}, 12px)`;
+      item.shape.forEach((shapeRow) => {
+        shapeRow.forEach((v) => {
+          const cell = document.createElement("span");
+          cell.className = "placed-shape-cell";
+          if (v === 1) {
+            cell.classList.add("on");
+            cell.style.borderColor = SHAPE_COLORS[item.shapeName] || "#4b5563";
+            if (state.selectedPlacementId === item.placementId) {
+              cell.style.background = SHAPE_COLORS[item.shapeName] || "#22c55e";
+            }
+          }
+          preview.appendChild(cell);
+        });
+      });
+    }
+    li.appendChild(preview);
     dom.placedOrder.appendChild(li);
   }
 }
@@ -117,6 +166,12 @@ function render() {
   } else {
     dom.status.textContent = "未开始";
   }
+  const canDelete =
+    state.running &&
+    !state.isOver &&
+    Number.isFinite(state.selectedPlacementId) &&
+    state.placedHistory.some((item) => item.placementId === state.selectedPlacementId);
+  dom.deleteBtn.disabled = !canDelete;
 }
 
 function nextShape() {
@@ -138,6 +193,7 @@ function startGame() {
   state = buildInitialState();
   state.running = true;
   dom.placeBtn.disabled = false;
+  dom.deleteBtn.disabled = true;
   nextShape();
   render();
 
@@ -165,7 +221,50 @@ function placeCurrentShape() {
   render();
 }
 
+function deleteSelectedShape() {
+  if (!state.running || state.isOver) return;
+  const placementId = state.selectedPlacementId;
+  if (!Number.isFinite(placementId)) return;
+
+  const nextState = removePlacementById(state, placementId);
+  if (nextState === state) {
+    state.message = "未找到可删除的选中图案";
+  } else {
+    state = {
+      ...nextState,
+      message: `已删除图案 #${placementId} 的剩余部分`
+    };
+  }
+  render();
+}
+
 dom.startBtn.addEventListener("click", startGame);
 dom.placeBtn.addEventListener("click", placeCurrentShape);
+dom.deleteBtn.addEventListener("click", deleteSelectedShape);
+dom.board.addEventListener("click", (event) => {
+  const target = event.target.closest(".cell");
+  if (!target || !dom.board.contains(target)) return;
+  const placementId = Number(target.dataset.placementId);
+  if (!Number.isFinite(placementId)) {
+    state.selectedPlacementId = null;
+  } else if (state.selectedPlacementId === placementId) {
+    state.selectedPlacementId = null;
+  } else {
+    state.selectedPlacementId = placementId;
+  }
+  render();
+});
+dom.placedOrder.addEventListener("click", (event) => {
+  const target = event.target.closest(".placed-order-item");
+  if (!target || !dom.placedOrder.contains(target)) return;
+  const placementId = Number(target.dataset.placementId);
+  if (!Number.isFinite(placementId)) return;
+  if (state.selectedPlacementId === placementId) {
+    state.selectedPlacementId = null;
+  } else {
+    state.selectedPlacementId = placementId;
+  }
+  render();
+});
 
 render();

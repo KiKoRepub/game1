@@ -6,7 +6,8 @@ import {
   clearLines,
   createBoard,
   findPlacement,
-  placeShape
+  placeShape,
+  removePlacementById
 } from "../js/gameLogic.js";
 
 test("findPlacement follows top then left", () => {
@@ -99,7 +100,35 @@ test("applyTurn keeps history until shape fully cleared", () => {
   const shape = [[1]];
   const next = applyTurn(state, shape, "J");
   assert.equal(next.lastCleared, 1);
-  assert.deepEqual(next.placedHistory, [
-    { placementId: 1, shapeName: "O", remainingCells: 1 }
+  assert.equal(next.placedHistory.length, 1);
+  assert.deepEqual(next.placedHistory[0], {
+    placementId: 1,
+    shapeName: "O",
+    remainingCells: 1
+  });
+});
+
+test("removePlacementById removes selected shape remains", () => {
+  const state = {
+    board: [
+      ["O@1", 0, "J@2"],
+      ["O@1", "J@2", 0],
+      [0, 0, 0]
+    ],
+    score: 0,
+    selectedPlacementId: 1,
+    placedHistory: [
+      { placementId: 1, shapeName: "O", remainingCells: 2 },
+      { placementId: 2, shapeName: "J", remainingCells: 2 }
+    ]
+  };
+
+  const next = removePlacementById(state, 1);
+  assert.deepEqual(next.board, [
+    [0, 0, "J@2"],
+    [0, "J@2", 0],
+    [0, 0, 0]
   ]);
+  assert.equal(next.selectedPlacementId, null);
+  assert.deepEqual(next.placedHistory, [{ placementId: 2, shapeName: "J", remainingCells: 2 }]);
 });
