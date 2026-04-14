@@ -95,16 +95,28 @@ test("applyTurn keeps history until shape fully cleared", () => {
     ],
     score: 0,
     nextPlacementId: 2,
-    placedHistory: [{ placementId: 1, shapeName: "O", remainingCells: 2 }]
+    placedHistory: [
+      {
+        serialNo: 1,
+        color: "O",
+        shapeType: "O",
+        skinPath: "skins/rectangle",
+        x: null,
+        y: null
+      }
+    ]
   };
   const shape = [[1]];
   const next = applyTurn(state, shape, "J");
   assert.equal(next.lastCleared, 1);
   assert.equal(next.placedHistory.length, 1);
   assert.deepEqual(next.placedHistory[0], {
-    placementId: 1,
-    shapeName: "O",
-    remainingCells: 1
+    serialNo: 1,
+    color: "O",
+    shapeType: "O",
+    skinPath: "skins/rectangle",
+    x: null,
+    y: null
   });
 });
 
@@ -118,8 +130,22 @@ test("removePlacementById removes selected shape remains", () => {
     score: 0,
     selectedPlacementId: 1,
     placedHistory: [
-      { placementId: 1, shapeName: "O", remainingCells: 2 },
-      { placementId: 2, shapeName: "J", remainingCells: 2 }
+      {
+        serialNo: 1,
+        color: "O",
+        shapeType: "O",
+        skinPath: "skins/rectangle",
+        x: null,
+        y: null
+      },
+      {
+        serialNo: 2,
+        color: "J",
+        shapeType: "J",
+        skinPath: "skins/rectangle",
+        x: null,
+        y: null
+      }
     ]
   };
 
@@ -130,5 +156,14 @@ test("removePlacementById removes selected shape remains", () => {
     [0, 0, 0]
   ]);
   assert.equal(next.selectedPlacementId, null);
-  assert.deepEqual(next.placedHistory, [{ placementId: 2, shapeName: "J", remainingCells: 2 }]);
+  assert.deepEqual(next.placedHistory, [
+    {
+      serialNo: 2,
+      color: "J",
+      shapeType: "J",
+      skinPath: "skins/rectangle",
+      x: null,
+      y: null
+    }
+  ]);
 });

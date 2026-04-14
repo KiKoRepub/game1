@@ -1,3 +1,10 @@
+import {
+  buildToken,
+  collectAlivePlacementIds,
+  createSoldierUnit,
+  parseToken
+} from "./entities.js";
+
 export function createBoard(size = 8) {
   return Array.from({ length: size }, () => Array(size).fill(0));
 }
@@ -47,32 +54,6 @@ export function placeShape(board, shape, placement, fillValue = 1) {
     }
   }
   return next;
-}
-
-function buildToken(shapeName, placementId) {
-  return `${shapeName}@${placementId}`;
-}
-
-function countShapeCells(shape) {
-  let total = 0;
-  for (const row of shape) {
-    for (const v of row) {
-      if (v === 1) total += 1;
-    }
-  }
-  return total;
-}
-
-function cloneShape(shape) {
-  return shape.map((row) => row.slice());
-}
-
-function parseToken(token) {
-  const [shapeName, idText] = token.split("@");
-  return {
-    shapeName,
-    placementId: Number(idText)
-  };
 }
 
 export function clearLines(board) {
@@ -148,7 +129,7 @@ export function removePlacementById(state, placementId) {
   return {
     ...state,
     board,
-    placedHistory: state.placedHistory.filter((item) => item.placementId !== placementId),
+    placedHistory: state.placedHistory.filter((item) => item.serialNo !== placementId),
     selectedPlacementId: null
   };
 }
@@ -168,29 +149,18 @@ export function applyTurn(state, shape, fillValue = 1) {
   const placementId = hasHistoryState ? state.nextPlacementId : null;
   const boardToken = placementId === null ? fillValue : buildToken(fillValue, placementId);
   const placedBoard = placeShape(state.board, shape, placement, boardToken);
-  const { board: clearedBoard, cleared, removedTokens } = clearLines(placedBoard);
+  const { board: clearedBoard, cleared } = clearLines(placedBoard);
   const gained = calcScore(cleared);
 
   let placedHistory = state.placedHistory;
   let nextPlacementId = state.nextPlacementId;
   if (hasHistoryState) {
     const nextHistory = state.placedHistory.map((item) => ({ ...item }));
-    nextHistory.push({
-      placementId,
-      shapeName: fillValue,
-      remainingCells: countShapeCells(shape),
-      shape: cloneShape(shape)
-    });
-    const byId = new Map(nextHistory.map((item) => [item.placementId, item]));
-
-    for (const [token, removedCount] of removedTokens.entries()) {
-      const parsed = parseToken(token);
-      const target = byId.get(parsed.placementId);
-      if (!target) continue;
-      target.remainingCells = Math.max(0, target.remainingCells - removedCount);
-    }
-
-    placedHistory = nextHistory.filter((item) => item.remainingCells > 0);
+    nextHistory.push(
+      createSoldierUnit(placementId, String(fillValue), String(fillValue))
+    );
+    const aliveIds = collectAlivePlacementIds(clearedBoard);
+    placedHistory = nextHistory.filter((item) => aliveIds.has(item.serialNo));
     nextPlacementId = placementId + 1;
   }
 

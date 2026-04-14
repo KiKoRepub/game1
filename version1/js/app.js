@@ -1,5 +1,6 @@
 import { randomShape, SHAPE_COLORS } from "./shapes.js";
 import { applyTurn, createBoard, removePlacementById } from "./gameLogic.js";
+import { cellToShapeName, tokenToPlacementId } from "./entities.js";
 
 const BOARD_SIZE = 8;
 const GAME_SECONDS = 180;
@@ -36,20 +37,6 @@ function buildInitialState() {
     lastGained: 0,
     message: "点击开始后进入 3 分钟挑战"
   };
-}
-
-function tokenToPlacementId(token) {
-  if (typeof token !== "string" || !token.includes("@")) return null;
-  const parts = token.split("@");
-  const id = Number(parts[1]);
-  return Number.isFinite(id) ? id : null;
-}
-
-function cellToShapeName(cell) {
-  if (cell === 0) return null;
-  if (typeof cell !== "string") return String(cell);
-  if (!cell.includes("@")) return cell;
-  return cell.split("@")[0];
 }
 
 function renderBoard() {
@@ -93,37 +80,28 @@ function renderPlacedOrder() {
   for (const item of items) {
     const li = document.createElement("li");
     li.className = "placed-order-item";
-    if (state.selectedPlacementId === item.placementId) {
+    if (state.selectedPlacementId === item.serialNo) {
       li.classList.add("active");
     }
-    li.dataset.placementId = String(item.placementId);
-    li.style.borderColor = SHAPE_COLORS[item.shapeName] || "#4b5563";
+    li.dataset.placementId = String(item.serialNo);
+    li.style.borderColor = SHAPE_COLORS[item.color] || "#4b5563";
 
     const title = document.createElement("div");
     title.className = "placed-order-title";
-    title.textContent = item.shapeName;
+    title.textContent = `#${item.serialNo}`;
     li.appendChild(title);
 
-    const preview = document.createElement("div");
-    preview.className = "placed-shape-preview";
-    if (Array.isArray(item.shape) && item.shape.length > 0) {
-      preview.style.gridTemplateColumns = `repeat(${item.shape[0].length}, 12px)`;
-      item.shape.forEach((shapeRow) => {
-        shapeRow.forEach((v) => {
-          const cell = document.createElement("span");
-          cell.className = "placed-shape-cell";
-          if (v === 1) {
-            cell.classList.add("on");
-            cell.style.borderColor = SHAPE_COLORS[item.shapeName] || "#4b5563";
-            if (state.selectedPlacementId === item.placementId) {
-              cell.style.background = SHAPE_COLORS[item.shapeName] || "#22c55e";
-            }
-          }
-          preview.appendChild(cell);
-        });
-      });
+    const skin = document.createElement("div");
+    skin.className = "soldier-skin";
+    skin.style.borderColor = SHAPE_COLORS[item.color] || "#4b5563";
+    skin.style.background = SHAPE_COLORS[item.color] || "#22c55e";
+    if (typeof item.skinPath === "string" && item.skinPath.trim() !== "") {
+      skin.style.backgroundImage = `url("${item.skinPath}")`;
+      skin.style.backgroundSize = "cover";
+      skin.style.backgroundPosition = "center";
+      skin.style.backgroundRepeat = "no-repeat";
     }
-    li.appendChild(preview);
+    li.appendChild(skin);
     dom.placedOrder.appendChild(li);
   }
 }
@@ -170,7 +148,7 @@ function render() {
     state.running &&
     !state.isOver &&
     Number.isFinite(state.selectedPlacementId) &&
-    state.placedHistory.some((item) => item.placementId === state.selectedPlacementId);
+    state.placedHistory.some((item) => item.serialNo === state.selectedPlacementId);
   dom.deleteBtn.disabled = !canDelete;
 }
 
