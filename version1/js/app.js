@@ -1,12 +1,16 @@
 import { randomShape, SHAPE_COLORS } from "./shapes.js";
 import { applyTurn, createBoard, removePlacementById } from "./gameLogic.js";
 import { cellToShapeName, tokenToPlacementId } from "./entities.js";
+import { createMapGrid, placeSoldierOnMap, syncMapWithHistory } from "./mapLogic.js";
 
 const BOARD_SIZE = 8;
 const GAME_SECONDS = 180;
+const LONG_PRESS_MS = 350;
+const LONG_PRESS_MOVE_TOLERANCE = 8;
 
 const dom = {
   board: document.getElementById("board"),
+  battleMap: document.getElementById("battleMap"),
   score: document.getElementById("score"),
   time: document.getElementById("time"),
   status: document.getElementById("status"),
@@ -22,6 +26,9 @@ const dom = {
 let state = buildInitialState();
 let currentShape = null;
 let timerId = null;
+let pendingLongPress = null;
+let dragState = null;
+let suppressPlacedOrderClick = false;
 
 function buildInitialState() {
   return {
@@ -32,6 +39,7 @@ function buildInitialState() {
     isOver: false,
     nextPlacementId: 1,
     placedHistory: [],
+    battleMap: createMapGrid(),
     selectedPlacementId: null,
     lastCleared: 0,
     lastGained: 0,
@@ -102,7 +110,57 @@ function renderPlacedOrder() {
       skin.style.backgroundRepeat = "no-repeat";
     }
     li.appendChild(skin);
+
+    const coords = document.createElement("div");
+    coords.className = "placed-order-coords";
+    coords.textContent =
+      Number.isInteger(item.x) && Number.isInteger(item.y)
+        ? `(${item.x},${item.y})`
+        : "(?,?)";
+    li.appendChild(coords);
     dom.placedOrder.appendChild(li);
+  }
+}
+
+function renderBattleMap() {
+  dom.battleMap.innerHTML = "";
+  for (let y = 0; y < state.battleMap.length; y += 1) {
+    const row = state.battleMap[y];
+    for (let x = 0; x < row.length; x += 1) {
+      const placementId = row[x];
+      const cell = document.createElement("div");
+      cell.className = "map-cell";
+      if (y === state.battleMap.length - 1) {
+        cell.classList.add("map-cell-last-row");
+      }
+      cell.dataset.x = String(x);
+      cell.dataset.y = String(y);
+
+      if (dragState?.targetX === x && dragState?.targetY === y) {
+        cell.classList.add("drag-target");
+      }
+
+      if (Number.isFinite(placementId)) {
+        const item = state.placedHistory.find((entry) => entry.serialNo === placementId);
+        const soldier = document.createElement("div");
+        soldier.className = "map-soldier";
+        soldier.style.background = SHAPE_COLORS[item?.color] || "#22c55e";
+        if (typeof item?.skinPath === "string" && item.skinPath.trim() !== "") {
+          soldier.style.backgroundImage = `url("${item.skinPath}")`;
+          soldier.style.backgroundSize = "cover";
+          soldier.style.backgroundPosition = "center";
+          soldier.style.backgroundRepeat = "no-repeat";
+        }
+
+        const label = document.createElement("div");
+        label.className = "map-soldier-label";
+        label.textContent = `#${placementId}`;
+        soldier.appendChild(label);
+        cell.appendChild(soldier);
+      }
+
+      dom.battleMap.appendChild(cell);
+    }
   }
 }
 
@@ -134,6 +192,7 @@ function render() {
   renderBoard();
   renderShape(currentShape);
   renderPlacedOrder();
+  renderBattleMap();
   dom.score.textContent = String(state.score);
   dom.time.textContent = String(state.leftSeconds);
   dom.message.textContent = state.message;
@@ -152,6 +211,126 @@ function render() {
   dom.deleteBtn.disabled = !canDelete;
 }
 
+function clearPendingLongPress() {
+  if (!pendingLongPress) return;
+  clearTimeout(pendingLongPress.timerId);
+  pendingLongPress = null;
+}
+
+function cleanupDragGhost() {
+  if (dragState?.ghostEl?.parentNode) {
+    dragState.ghostEl.parentNode.removeChild(dragState.ghostEl);
+  }
+}
+
+function syncMapState(nextState) {
+  const synced = syncMapWithHistory(nextState.battleMap, nextState.placedHistory);
+  return {
+    ...nextState,
+    battleMap: synced.mapGrid,
+    placedHistory: synced.placedHistory
+  };
+}
+
+function updateDragTarget(clientX, clientY) {
+  if (!dragState) return;
+  dragState.ghostEl.style.left = `${clientX}px`;
+  dragState.ghostEl.style.top = `${clientY}px`;
+
+  const element = document.elementFromPoint(clientX, clientY);
+  const cell = element?.closest?.(".map-cell");
+  if (!cell || !dom.battleMap.contains(cell)) {
+    dragState.targetX = null;
+    dragState.targetY = null;
+    renderBattleMap();
+    return;
+  }
+
+  const x = Number(cell.dataset.x);
+  const y = Number(cell.dataset.y);
+  const occupiedId = state.battleMap[y]?.[x] ?? null;
+  if (Number.isFinite(occupiedId) && occupiedId !== dragState.placementId) {
+    dragState.targetX = null;
+    dragState.targetY = null;
+    renderBattleMap();
+    return;
+  }
+
+  dragState.targetX = x;
+  dragState.targetY = y;
+  renderBattleMap();
+}
+
+function beginDrag(placementId, clientX, clientY) {
+  const item = state.placedHistory.find((entry) => entry.serialNo === placementId);
+  if (!item) return;
+
+  const ghostEl = document.createElement("div");
+  ghostEl.className = "drag-ghost";
+  ghostEl.style.background = SHAPE_COLORS[item.color] || "#22c55e";
+  if (typeof item.skinPath === "string" && item.skinPath.trim() !== "") {
+    ghostEl.style.backgroundImage = `url("${item.skinPath}")`;
+    ghostEl.style.backgroundSize = "cover";
+    ghostEl.style.backgroundPosition = "center";
+    ghostEl.style.backgroundRepeat = "no-repeat";
+  }
+
+  const label = document.createElement("div");
+  label.className = "drag-ghost-label";
+  label.textContent = `#${item.serialNo}`;
+  ghostEl.appendChild(label);
+  document.body.appendChild(ghostEl);
+
+  dragState = {
+    placementId,
+    ghostEl,
+    targetX: null,
+    targetY: null
+  };
+  suppressPlacedOrderClick = true;
+  updateDragTarget(clientX, clientY);
+}
+
+function finishDrag() {
+  if (!dragState) return;
+  const { placementId, targetX, targetY } = dragState;
+  cleanupDragGhost();
+
+  if (Number.isInteger(targetX) && Number.isInteger(targetY)) {
+    const result = placeSoldierOnMap(state.battleMap, state.placedHistory, placementId, targetX, targetY);
+    if (result) {
+      state = {
+        ...state,
+        battleMap: result.mapGrid,
+        placedHistory: result.placedHistory,
+        message: `小兵 #${placementId} 已放置到地图坐标 (${targetX}, ${targetY})`
+      };
+    } else {
+      state = {
+        ...state,
+        message: "目标格子已被其他小兵占用，请选择空位"
+      };
+    }
+  }
+
+  dragState = null;
+  render();
+  window.setTimeout(() => {
+    suppressPlacedOrderClick = false;
+  }, 0);
+}
+
+function cancelDrag() {
+  clearPendingLongPress();
+  if (!dragState) return;
+  cleanupDragGhost();
+  dragState = null;
+  renderBattleMap();
+  window.setTimeout(() => {
+    suppressPlacedOrderClick = false;
+  }, 0);
+}
+
 function nextShape() {
   currentShape = randomShape();
 }
@@ -168,6 +347,8 @@ function endGame(reason) {
 
 function startGame() {
   if (timerId) clearInterval(timerId);
+  clearPendingLongPress();
+  cancelDrag();
   state = buildInitialState();
   state.running = true;
   dom.placeBtn.disabled = false;
@@ -190,7 +371,7 @@ function startGame() {
 function placeCurrentShape() {
   if (!state.running || state.isOver || !currentShape) return;
 
-  state = applyTurn(state, currentShape.shape, currentShape.name);
+  state = syncMapState(applyTurn(state, currentShape.shape, currentShape.name));
   if (state.isOver) {
     endGame("无可放置位置");
     return;
@@ -208,10 +389,10 @@ function deleteSelectedShape() {
   if (nextState === state) {
     state.message = "未找到可删除的选中图案";
   } else {
-    state = {
+    state = syncMapState({
       ...nextState,
       message: `已删除图案 #${placementId} 的剩余部分`
-    };
+    });
   }
   render();
 }
@@ -219,6 +400,23 @@ function deleteSelectedShape() {
 dom.startBtn.addEventListener("click", startGame);
 dom.placeBtn.addEventListener("click", placeCurrentShape);
 dom.deleteBtn.addEventListener("click", deleteSelectedShape);
+document.addEventListener("pointermove", (event) => {
+  if (pendingLongPress) {
+    const movedX = event.clientX - pendingLongPress.startX;
+    const movedY = event.clientY - pendingLongPress.startY;
+    if (Math.hypot(movedX, movedY) > LONG_PRESS_MOVE_TOLERANCE) {
+      clearPendingLongPress();
+    }
+  }
+  if (dragState) {
+    updateDragTarget(event.clientX, event.clientY);
+  }
+});
+document.addEventListener("pointerup", () => {
+  clearPendingLongPress();
+  finishDrag();
+});
+document.addEventListener("pointercancel", cancelDrag);
 dom.board.addEventListener("click", (event) => {
   const target = event.target.closest(".cell");
   if (!target || !dom.board.contains(target)) return;
@@ -232,7 +430,27 @@ dom.board.addEventListener("click", (event) => {
   }
   render();
 });
+dom.placedOrder.addEventListener("pointerdown", (event) => {
+  const target = event.target.closest(".placed-order-item");
+  if (!target || !dom.placedOrder.contains(target)) return;
+  const placementId = Number(target.dataset.placementId);
+  if (!Number.isFinite(placementId)) return;
+
+  clearPendingLongPress();
+  pendingLongPress = {
+    startX: event.clientX,
+    startY: event.clientY,
+    timerId: window.setTimeout(() => {
+      beginDrag(placementId, event.clientX, event.clientY);
+      pendingLongPress = null;
+    }, LONG_PRESS_MS)
+  };
+});
+dom.placedOrder.addEventListener("pointerup", clearPendingLongPress);
+dom.placedOrder.addEventListener("pointerleave", clearPendingLongPress);
+dom.placedOrder.addEventListener("pointercancel", cancelDrag);
 dom.placedOrder.addEventListener("click", (event) => {
+  if (suppressPlacedOrderClick) return;
   const target = event.target.closest(".placed-order-item");
   if (!target || !dom.placedOrder.contains(target)) return;
   const placementId = Number(target.dataset.placementId);

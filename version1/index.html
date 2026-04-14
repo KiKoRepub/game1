@@ -8,29 +8,40 @@
   </head>
   <body>
     <main class="container">
-      <section class="panel">
-        <h1>Version1 方块填充</h1>
-        <div class="stats">
-          <p>时间: <span id="time">180</span>s</p>
-          <p>分数: <span id="score">0</span></p>
-          <p>状态: <span id="status">未开始</span></p>
-        </div>
-        <div class="actions">
-          <button id="startBtn">开始游戏</button>
-          <button id="placeBtn" disabled>放置当前图案</button>
-          <button id="deleteBtn" disabled>删除选中图案</button>
-        </div>
-        <h2>当前图案</h2>
-        <div id="shapePreview" class="shape-preview"></div>
-        <p id="shapeName" class="shape-name">-</p>
-        <h2>已置入顺序（最新在前）</h2>
-        <ul id="placedOrder" class="placed-order"></ul>
-        <p id="message" class="message">点击开始后进入 3 分钟挑战</p>
+      <section class="top-layout">
+        <section class="panel side-panel">
+          <h1>Version1 方块填充</h1>
+          <div class="stats">
+            <p>时间: <span id="time">180</span>s</p>
+            <p>分数: <span id="score">0</span></p>
+            <p>状态: <span id="status">未开始</span></p>
+          </div>
+          <div class="actions">
+            <button id="startBtn">开始游戏</button>
+            <button id="placeBtn" disabled>放置当前图案</button>
+            <button id="deleteBtn" disabled>删除选中图案</button>
+          </div>
+          <h2>当前图案</h2>
+          <div id="shapePreview" class="shape-preview"></div>
+          <p id="shapeName" class="shape-name">-</p>
+          <p id="message" class="message">点击开始后进入 3 分钟挑战</p>
+        </section>
+
+        <section class="panel board-panel">
+          <h2>棋盘 (8x8)</h2>
+          <div id="board" class="board"></div>
+        </section>
+
+        <section class="panel side-panel">
+          <h2>已置入顺序（最新在前）</h2>
+          <ul id="placedOrder" class="placed-order"></ul>
+          <p class="map-tip">长按顺序表中的小兵后，可拖入下方地图格子。</p>
+        </section>
       </section>
 
-      <section>
-        <h2>棋盘 (8x8)</h2>
-        <div id="board" class="board"></div>
+      <section class="panel map-panel">
+        <h2>地图 (10x5，横向)</h2>
+        <div id="battleMap" class="battle-map"></div>
       </section>
     </main>
 

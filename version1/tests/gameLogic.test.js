@@ -9,6 +9,7 @@ import {
   placeShape,
   removePlacementById
 } from "../js/gameLogic.js";
+import { createMapGrid, placeSoldierOnMap, syncMapWithHistory } from "../js/mapLogic.js";
 
 test("findPlacement follows top then left", () => {
   const board = createBoard(5);
@@ -166,4 +167,59 @@ test("removePlacementById removes selected shape remains", () => {
       y: null
     }
   ]);
+});
+
+test("placeSoldierOnMap stores soldier coordinates on 5x10 map", () => {
+  const mapGrid = createMapGrid();
+  const placedHistory = [
+    {
+      serialNo: 1,
+      color: "O",
+      shapeType: "O",
+      skinPath: "skins/rectangle",
+      x: null,
+      y: null
+    }
+  ];
+
+  const next = placeSoldierOnMap(mapGrid, placedHistory, 1, 3, 4);
+  assert.ok(next);
+  assert.equal(next.mapGrid[4][3], 1);
+  assert.deepEqual(next.placedHistory[0], {
+    serialNo: 1,
+    color: "O",
+    shapeType: "O",
+    skinPath: "skins/rectangle",
+    x: 3,
+    y: 4
+  });
+});
+
+test("syncMapWithHistory clears map cells for removed soldiers", () => {
+  const mapGrid = createMapGrid();
+  mapGrid[2][1] = 1;
+  mapGrid[3][2] = 2;
+
+  const placedHistory = [
+    {
+      serialNo: 2,
+      color: "J",
+      shapeType: "J",
+      skinPath: "skins/rectangle",
+      x: null,
+      y: null
+    }
+  ];
+
+  const next = syncMapWithHistory(mapGrid, placedHistory);
+  assert.equal(next.mapGrid[2][1], null);
+  assert.equal(next.mapGrid[3][2], 2);
+  assert.deepEqual(next.placedHistory[0], {
+    serialNo: 2,
+    color: "J",
+    shapeType: "J",
+    skinPath: "skins/rectangle",
+    x: 2,
+    y: 3
+  });
 });
