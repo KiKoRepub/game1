@@ -30,6 +30,13 @@ let pendingLongPress = null;
 let dragState = null;
 let suppressPlacedOrderClick = false;
 
+function getPendingDeployments(placedHistory) {
+  if (!Array.isArray(placedHistory)) return [];
+  return placedHistory.filter(
+    (item) => !Number.isInteger(item.x) || !Number.isInteger(item.y)
+  );
+}
+
 function buildInitialState() {
   return {
     board: createBoard(BOARD_SIZE),
@@ -76,15 +83,16 @@ function renderBoard() {
 
 function renderPlacedOrder() {
   dom.placedOrder.innerHTML = "";
-  if (!Array.isArray(state.placedHistory) || state.placedHistory.length === 0) {
+  const pendingItems = getPendingDeployments(state.placedHistory);
+  if (pendingItems.length === 0) {
     const emptyEl = document.createElement("li");
     emptyEl.className = "placed-order-empty";
-    emptyEl.textContent = "暂无记录";
+    emptyEl.textContent = "暂无待部署小兵";
     dom.placedOrder.appendChild(emptyEl);
     return;
   }
 
-  const items = state.placedHistory.slice().reverse();
+  const items = pendingItems.slice().reverse();
   for (const item of items) {
     const li = document.createElement("li");
     li.className = "placed-order-item";
@@ -144,6 +152,9 @@ function renderBattleMap() {
         const item = state.placedHistory.find((entry) => entry.serialNo === placementId);
         const soldier = document.createElement("div");
         soldier.className = "map-soldier";
+        if (state.selectedPlacementId === placementId) {
+          soldier.classList.add("selected");
+        }
         soldier.style.background = SHAPE_COLORS[item?.color] || "#22c55e";
         if (typeof item?.skinPath === "string" && item.skinPath.trim() !== "") {
           soldier.style.backgroundImage = `url("${item.skinPath}")`;
@@ -151,11 +162,6 @@ function renderBattleMap() {
           soldier.style.backgroundPosition = "center";
           soldier.style.backgroundRepeat = "no-repeat";
         }
-
-        const label = document.createElement("div");
-        label.className = "map-soldier-label";
-        label.textContent = `#${placementId}`;
-        soldier.appendChild(label);
         cell.appendChild(soldier);
       }
 
@@ -291,6 +297,19 @@ function beginDrag(placementId, clientX, clientY) {
   updateDragTarget(clientX, clientY);
 }
 
+function scheduleLongPressDrag(placementId, clientX, clientY) {
+  if (!Number.isFinite(placementId)) return;
+  clearPendingLongPress();
+  pendingLongPress = {
+    startX: clientX,
+    startY: clientY,
+    timerId: window.setTimeout(() => {
+      beginDrag(placementId, clientX, clientY);
+      pendingLongPress = null;
+    }, LONG_PRESS_MS)
+  };
+}
+
 function finishDrag() {
   if (!dragState) return;
   const { placementId, targetX, targetY } = dragState;
@@ -303,6 +322,7 @@ function finishDrag() {
         ...state,
         battleMap: result.mapGrid,
         placedHistory: result.placedHistory,
+        selectedPlacementId: placementId,
         message: `小兵 #${placementId} 已放置到地图坐标 (${targetX}, ${targetY})`
       };
     } else {
@@ -430,21 +450,45 @@ dom.board.addEventListener("click", (event) => {
   }
   render();
 });
+dom.battleMap.addEventListener("click", (event) => {
+  const targetCell = event.target.closest(".map-cell");
+  if (!targetCell || !dom.battleMap.contains(targetCell)) return;
+  const x = Number(targetCell.dataset.x);
+  const y = Number(targetCell.dataset.y);
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return;
+
+  const placementId = state.battleMap[y]?.[x];
+  if (!Number.isFinite(placementId)) {
+    state.selectedPlacementId = null;
+    state.message = "当前地图格子没有小兵";
+    render();
+    return;
+  }
+
+  state.selectedPlacementId = placementId;
+  state.message = `已选中图案 #${placementId}，可点击“删除选中图案”，长按可拖拽`;
+  render();
+});
+dom.battleMap.addEventListener("pointerdown", (event) => {
+  const targetCell = event.target.closest(".map-cell");
+  if (!targetCell || !dom.battleMap.contains(targetCell)) return;
+  const x = Number(targetCell.dataset.x);
+  const y = Number(targetCell.dataset.y);
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return;
+
+  const placementId = state.battleMap[y]?.[x];
+  if (!Number.isFinite(placementId)) return;
+  scheduleLongPressDrag(placementId, event.clientX, event.clientY);
+});
+dom.battleMap.addEventListener("pointerup", clearPendingLongPress);
+dom.battleMap.addEventListener("pointerleave", clearPendingLongPress);
+dom.battleMap.addEventListener("pointercancel", cancelDrag);
 dom.placedOrder.addEventListener("pointerdown", (event) => {
   const target = event.target.closest(".placed-order-item");
   if (!target || !dom.placedOrder.contains(target)) return;
   const placementId = Number(target.dataset.placementId);
   if (!Number.isFinite(placementId)) return;
-
-  clearPendingLongPress();
-  pendingLongPress = {
-    startX: event.clientX,
-    startY: event.clientY,
-    timerId: window.setTimeout(() => {
-      beginDrag(placementId, event.clientX, event.clientY);
-      pendingLongPress = null;
-    }, LONG_PRESS_MS)
-  };
+  scheduleLongPressDrag(placementId, event.clientX, event.clientY);
 });
 dom.placedOrder.addEventListener("pointerup", clearPendingLongPress);
 dom.placedOrder.addEventListener("pointerleave", clearPendingLongPress);

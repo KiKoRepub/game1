@@ -220,6 +220,10 @@ button:disabled {
   overflow: hidden;
 }
 
+.map-soldier.selected {
+  box-shadow: 0 0 0 2px #111827 inset, 0 0 0 2px #f8fafc;
+}
+
 .map-soldier-label {
   position: absolute;
   top: 3px;
